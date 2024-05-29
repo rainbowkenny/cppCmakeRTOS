@@ -18,7 +18,9 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "cmsis_os.h"
+// #include "cmsis_os.h"
+#include "FreeRTOS.h"
+#include "task.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -50,13 +52,21 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void vBlueLedControllerTask(void *pvParameters)
+{
+	while(true)
+	{
+		HAL_GPIO_TogglePin(LD2_GPIO_Port,LD2_Pin);
+		HAL_Delay(100);
+
+	}
+}
 
 /* USER CODE END 0 */
 
@@ -64,7 +74,7 @@ void MX_FREERTOS_Init(void);
  * @brief  The application entry point.
  * @retval int
  */
-int main(void)
+int main()
 {
 
 	/* USER CODE BEGIN 1 */
@@ -91,17 +101,10 @@ int main(void)
 	MX_GPIO_Init();
 	MX_USART2_UART_Init();
 	/* USER CODE BEGIN 2 */
-
+	xTaskCreate(vBlueLedControllerTask,"Blue led controller task", 100,nullptr,1, nullptr);
 	/* USER CODE END 2 */
 
-	/* Init scheduler */
-	osKernelInitialize();
-
-	/* Call init function for freertos objects (in cmsis_os2.c) */
-	MX_FREERTOS_Init();
-
-	/* Start scheduler */
-	osKernelStart();
+	vTaskStartScheduler();
 
 	/* We should never get here as control is now taken by the scheduler */
 

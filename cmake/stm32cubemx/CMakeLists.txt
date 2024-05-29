@@ -24,7 +24,7 @@ target_include_directories(stm32cubemx INTERFACE
 )
 
 target_sources(stm32cubemx INTERFACE
-    ../../Core/Src/main.c
+    ../../Core/Src/main.cpp
     ../../Core/Src/gpio.c
     ../../Core/Src/freertos.c
     ../../Core/Src/usart.c
