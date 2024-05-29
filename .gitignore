@@ -1,2 +1,5 @@
 build/
 Debug/
+.settings/
+compile_commands.json
+.project
