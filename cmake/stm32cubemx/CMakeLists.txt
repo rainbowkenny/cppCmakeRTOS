@@ -17,7 +17,6 @@ target_include_directories(stm32cubemx INTERFACE
     ../../Drivers/STM32F0xx_HAL_Driver/Inc
     ../../Drivers/STM32F0xx_HAL_Driver/Inc/Legacy
     ../../Middlewares/Third_Party/FreeRTOS/Source/include
-    ../../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2
     ../../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM0
     ../../Drivers/CMSIS/Device/ST/STM32F0xx/Include
     ../../Drivers/CMSIS/Include
@@ -26,7 +25,6 @@ target_include_directories(stm32cubemx INTERFACE
 target_sources(stm32cubemx INTERFACE
     ../../Core/Src/main.cpp
     ../../Core/Src/gpio.c
-    ../../Core/Src/freertos.c
     ../../Core/Src/usart.c
     ../../Core/Src/stm32f0xx_it.c
     ../../Core/Src/stm32f0xx_hal_msp.c
