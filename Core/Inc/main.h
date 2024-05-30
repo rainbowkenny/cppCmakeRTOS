@@ -51,7 +51,8 @@ extern "C" {
 
 	/* Exported functions prototypes ---------------------------------------------*/
 	void Error_Handler(void);
-	void MX_FREERTOS_Init(void);
+	int __io_putchar(int ch);
+
 	/* USER CODE BEGIN EFP */
 
 	/* USER CODE END EFP */
@@ -65,6 +66,8 @@ extern "C" {
 #define USART_RX_GPIO_Port GPIOA
 #define LD2_Pin GPIO_PIN_5
 #define LD2_GPIO_Port GPIOA
+#define LD3_Pin GPIO_PIN_10
+#define LD3_GPIO_Port GPIOA
 #define TMS_Pin GPIO_PIN_13
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
@@ -73,7 +76,6 @@ extern "C" {
 	/* USER CODE BEGIN Private defines */
 
 	/* USER CODE END Private defines */
-	int __io_putchar(int ch);
 
 #ifdef __cplusplus
 }

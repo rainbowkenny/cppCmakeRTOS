@@ -5,9 +5,7 @@
 #include "gpio.h"
 #include <stdio.h>
 
-uint8_t buffer[256];
 void SystemClock_Config(void);
-int __io_putchar(int ch);
 
 
 void vBlueLedControllerTask(void *pvParameters)
@@ -16,8 +14,16 @@ void vBlueLedControllerTask(void *pvParameters)
 	{
 		HAL_GPIO_TogglePin(LD2_GPIO_Port,LD2_Pin);
 		printf("Hello!\n\r");
-		// sprintf((char*)buffer,"Hello\n\r");
-		// HAL_UART_Transmit(&huart2,buffer,sizeof(buffer),100);
+		HAL_Delay(500);
+
+	}
+}
+void vRedLedControllerTask(void *pvParameters)
+{
+	while(true)
+	{
+		HAL_GPIO_TogglePin(LD2_GPIO_Port,LD2_Pin);
+		printf("Hello!\n\r");
 		HAL_Delay(500);
 
 	}
