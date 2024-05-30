@@ -3,14 +3,22 @@
 #include "task.h"
 #include "usart.h"
 #include "gpio.h"
+#include <stdio.h>
 
+uint8_t buffer[256];
 void SystemClock_Config(void);
+int __io_putchar(int ch);
+
+
 void vBlueLedControllerTask(void *pvParameters)
 {
 	while(true)
 	{
 		HAL_GPIO_TogglePin(LD2_GPIO_Port,LD2_Pin);
-		HAL_Delay(100);
+		printf("Hello!\n\r");
+		// sprintf((char*)buffer,"Hello\n\r");
+		// HAL_UART_Transmit(&huart2,buffer,sizeof(buffer),100);
+		HAL_Delay(500);
 
 	}
 }
@@ -27,10 +35,12 @@ int main()
 	vTaskStartScheduler();
 	while (1)
 	{
-		/* USER CODE END WHILE */
-
-		/* USER CODE BEGIN 3 */
 	}
+}
+
+int __io_putchar(int ch){
+	HAL_UART_Transmit(&huart2,(uint8_t*)&ch,1,0xffff);
+	return ch;
 }
 
 /**

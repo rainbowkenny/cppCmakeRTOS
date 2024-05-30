@@ -3,3 +3,5 @@ Debug/
 .settings/
 compile_commands.json
 .project
+.cache
+Session.vim

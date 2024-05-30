@@ -73,6 +73,7 @@ extern "C" {
 	/* USER CODE BEGIN Private defines */
 
 	/* USER CODE END Private defines */
+	int __io_putchar(int ch);
 
 #ifdef __cplusplus
 }
