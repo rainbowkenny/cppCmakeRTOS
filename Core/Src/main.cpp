@@ -5,29 +5,24 @@
 #include "gpio.h"
 #include <stdio.h>
 
+static constexpr uint16_t LD2 = LD2_Pin;
+static constexpr uint16_t LD3 = LD3_Pin;
+static constexpr uint16_t LD4 = LD4_Pin;
+
 void SystemClock_Config(void);
 
 
-void vBlueLedControllerTask(void *pvParameters)
+void vLedControllerTask(void *vLED)
 {
 	while(true)
 	{
-		HAL_GPIO_TogglePin(LD2_GPIO_Port,LD2_Pin);
-		printf("Hello!\n\r");
+		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
+		// printf("Hello!\n\r");
 		HAL_Delay(500);
 
 	}
 }
-void vRedLedControllerTask(void *pvParameters)
-{
-	while(true)
-	{
-		HAL_GPIO_TogglePin(LD2_GPIO_Port,LD2_Pin);
-		printf("Hello!\n\r");
-		HAL_Delay(500);
 
-	}
-}
 
 int main()
 {
@@ -36,7 +31,10 @@ int main()
 	SystemClock_Config();
 	MX_GPIO_Init();
 	MX_USART2_UART_Init();
-	xTaskCreate(vBlueLedControllerTask,"Blue led controller task", 100,nullptr,1, nullptr);
+
+	xTaskCreate(vLedControllerTask,"Blue led controller task", 100,(void*)&LD2,1, nullptr);
+	xTaskCreate(vLedControllerTask,"Blue led controller task", 100,(void*)&LD3,1, nullptr);
+	xTaskCreate(vLedControllerTask,"Blue led controller task", 100,(void*)&LD4,1, nullptr);
 
 	vTaskStartScheduler();
 	while (1)
