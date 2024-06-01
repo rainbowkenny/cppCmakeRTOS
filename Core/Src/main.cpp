@@ -9,6 +9,8 @@ static constexpr uint16_t LD2 = LD2_Pin;
 static constexpr uint16_t LD3 = LD3_Pin;
 static constexpr uint16_t LD4 = LD4_Pin;
 
+static TaskHandle_t handleLD2, handleLD3, handleLD4;
+
 void SystemClock_Config(void);
 
 
@@ -16,10 +18,23 @@ void vLedControllerTask(void *vLED)
 {
 	while(true)
 	{
+		int i{};
 		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
-		// printf("Hello!\n\r");
-		HAL_Delay(500);
+		for (;i<100000;i++){}//waste time
+				     // printf("Hello!\n\r");
+				     // HAL_Delay(500);
 
+	}
+}
+
+void vPriorityControlTask(void *pvParameter)
+{
+	while(true)
+	{
+		// int i{};
+		// for (;i<100000;i++);//waste time
+		HAL_Delay(5000);
+		vTaskPrioritySet(handleLD4,3);
 	}
 }
 
@@ -32,9 +47,11 @@ int main()
 	MX_GPIO_Init();
 	MX_USART2_UART_Init();
 
-	xTaskCreate(vLedControllerTask,"Blue led controller task", 100,(void*)&LD2,1, nullptr);
-	xTaskCreate(vLedControllerTask,"Blue led controller task", 100,(void*)&LD3,1, nullptr);
-	xTaskCreate(vLedControllerTask,"Blue led controller task", 100,(void*)&LD4,1, nullptr);
+
+	xTaskCreate(vLedControllerTask,"LD2 controller task", 100,(void*)&LD2,3, &handleLD2);
+	// xTaskCreate(vLedControllerTask,"LD3 controller task", 100,(void*)&LD3,2, &handleLD3);
+	xTaskCreate(vLedControllerTask,"LD4 controller task", 100,(void*)&LD4,2, &handleLD4);
+	xTaskCreate(vPriorityControlTask,"Set prioity task", 100,nullptr,3, nullptr);
 
 	vTaskStartScheduler();
 	while (1)
