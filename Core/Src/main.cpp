@@ -14,14 +14,13 @@ static TaskHandle_t handleLD2, handleLD3, handleLD4;
 void SystemClock_Config(void);
 
 
-void vLedControllerTask(void *vLED)
+void vLed2ControllerTask(void *vLED)
 {
 	while(true)
 	{
 		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
-		for (int i=0;i<1000000;i++){}//waste time
-					     // printf("Hello!\n\r");
-					     // HAL_Delay(500);
+		// printf("Hello!\n\r");
+		HAL_Delay(500);
 
 	}
 }
@@ -32,10 +31,12 @@ void vLed4ControllerTask(void *vLED)
 	while(true)
 	{
 		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
-		for (int i=0;i<1000000;i++){}//waste time
+		HAL_Delay(500);
 		counter++;
 		if(counter>10)//de-prioritize self after 5 blinks.
-			vTaskPrioritySet(nullptr,uxTaskPriorityGet(nullptr)+1);
+		{
+			vTaskSuspend(handleLD2);
+		}
 
 	}
 }
@@ -50,7 +51,7 @@ int main()
 	MX_USART2_UART_Init();
 
 
-	xTaskCreate(vLedControllerTask,"LD2 controller task", 100,(void*)&LD2,3, &handleLD2);
+	xTaskCreate(vLed2ControllerTask,"LD2 controller task", 100,(void*)&LD2,3, &handleLD2);
 	xTaskCreate(vLed4ControllerTask,"LD4 controller task", 100,(void*)&LD4,3, &handleLD4);
 
 	vTaskStartScheduler();
