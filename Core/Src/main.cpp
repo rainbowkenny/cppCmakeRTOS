@@ -35,7 +35,7 @@ void vLed4ControllerTask(void *vLED)
 		for (int i=0;i<1000000;i++){}//waste time
 		counter++;
 		if(counter>10)//de-prioritize self after 5 blinks.
-			vTaskPrioritySet(nullptr,2);
+			vTaskPrioritySet(nullptr,uxTaskPriorityGet(nullptr)+1);
 
 	}
 }
