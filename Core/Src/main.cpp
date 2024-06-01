@@ -16,11 +16,19 @@ void SystemClock_Config(void);
 
 void vLed2ControllerTask(void *vLED)
 {
+	int counter{};
 	while(true)
 	{
 		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
 		// printf("Hello!\n\r");
 		HAL_Delay(100);
+		counter++;
+		if(counter>10)
+		{
+			counter=0;
+			vTaskResume(handleLD4);
+			vTaskSuspend(nullptr);
+		}
 
 	}
 }
@@ -33,17 +41,12 @@ void vLed4ControllerTask(void *vLED)
 		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
 		HAL_Delay(100);
 		counter++;
-		if(counter>10)//de-prioritize self after 5 blinks.
+		if(counter>10)
 		{
-			vTaskSuspend(handleLD2);
-		}
-
-		if(counter>20)
-		{
-			vTaskResume(handleLD2);
 			counter=0;
+			vTaskResume(handleLD2);
+			vTaskSuspend(nullptr);
 		}
-
 
 	}
 }
