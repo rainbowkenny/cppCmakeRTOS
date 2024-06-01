@@ -20,7 +20,7 @@ void vLed2ControllerTask(void *vLED)
 	{
 		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
 		// printf("Hello!\n\r");
-		HAL_Delay(500);
+		HAL_Delay(100);
 
 	}
 }
@@ -31,12 +31,19 @@ void vLed4ControllerTask(void *vLED)
 	while(true)
 	{
 		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
-		HAL_Delay(500);
+		HAL_Delay(100);
 		counter++;
 		if(counter>10)//de-prioritize self after 5 blinks.
 		{
 			vTaskSuspend(handleLD2);
 		}
+
+		if(counter>20)
+		{
+			vTaskResume(handleLD2);
+			counter=0;
+		}
+
 
 	}
 }
@@ -74,6 +81,7 @@ void SystemClock_Config(void)
 	RCC_OscInitTypeDef RCC_OscInitStruct = {0};
 	RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 	RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+
 
 	/** Initializes the RCC Oscillators according to the specified parameters
 	 * in the RCC_OscInitTypeDef structure.
