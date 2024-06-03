@@ -16,36 +16,20 @@ void SystemClock_Config(void);
 
 void vLed2ControllerTask(void *vLED)
 {
-	int counter{};
 	while(true)
 	{
+		HAL_Delay(1000);
 		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
-		// printf("Hello!\n\r");
-		HAL_Delay(100);
-		counter++;
-		if(counter>10)
-		{
-			counter=0;
-			vTaskResume(handleLD4);
-			vTaskDelete(nullptr);
-		}
 
 	}
 }
 
 void vLed4ControllerTask(void *vLED)
 {
-	int counter{};
 	while(true)
 	{
+		HAL_Delay(1000);
 		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
-		HAL_Delay(100);
-		counter++;
-		if(counter>10)
-		{
-			counter=0;
-			vTaskResume(handleLD2);
-		}
 
 	}
 }
@@ -60,7 +44,7 @@ int main()
 	MX_USART2_UART_Init();
 
 
-	xTaskCreate(vLed2ControllerTask,"LD2 controller task", 100,(void*)&LD2,3, &handleLD2);
+	xTaskCreate(vLed2ControllerTask,"LD2 controller task", 100,(void*)&LD2,1, &handleLD2);
 	xTaskCreate(vLed4ControllerTask,"LD4 controller task", 100,(void*)&LD4,3, &handleLD4);
 
 	vTaskStartScheduler();
