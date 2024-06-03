@@ -28,7 +28,7 @@ void vLed4ControllerTask(void *vLED)
 {
 	while(true)
 	{
-		HAL_Delay(1000);
+		vTaskDelay(pdMS_TO_TICKS(1000));
 		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
 
 	}
