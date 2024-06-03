@@ -4,6 +4,7 @@
 #include "usart.h"
 #include "gpio.h"
 #include <stdio.h>
+#include <assert.h>
 
 static constexpr uint16_t LD2 = LD2_Pin;
 static constexpr uint16_t LD3 = LD3_Pin;
@@ -18,7 +19,16 @@ void vLed2ControllerTask(void *vLED)
 {
 	while(true)
 	{
-		HAL_Delay(1000);
+		const auto period=pdMS_TO_TICKS(1000);
+		auto lastWokenTime = xTaskGetTickCount();
+
+		//Do something that takes less than period
+		const auto dummyDelay = pdMS_TO_TICKS(500);
+		static_assert(dummyDelay<period);
+		vTaskDelay(dummyDelay);
+
+
+		vTaskDelayUntil(&lastWokenTime,period);
 		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
 
 	}
@@ -28,7 +38,9 @@ void vLed4ControllerTask(void *vLED)
 {
 	while(true)
 	{
-		vTaskDelay(pdMS_TO_TICKS(1000));
+		auto period=pdMS_TO_TICKS(1000);
+		auto lastWokenTime = xTaskGetTickCount();
+		vTaskDelayUntil(&lastWokenTime,period);
 		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
 
 	}
