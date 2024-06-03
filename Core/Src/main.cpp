@@ -27,7 +27,7 @@ void vLed2ControllerTask(void *vLED)
 		{
 			counter=0;
 			vTaskResume(handleLD4);
-			vTaskSuspend(nullptr);
+			vTaskDelete(nullptr);
 		}
 
 	}
@@ -45,7 +45,6 @@ void vLed4ControllerTask(void *vLED)
 		{
 			counter=0;
 			vTaskResume(handleLD2);
-			vTaskSuspend(nullptr);
 		}
 
 	}
