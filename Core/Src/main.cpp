@@ -1,47 +1,54 @@
 #include "main.h"
 #include "FreeRTOS.h"
+#include "projdefs.h"
 #include "task.h"
+#include "queue.h"
 #include "usart.h"
 #include "gpio.h"
 #include <stdio.h>
 #include <assert.h>
 
-static constexpr uint16_t LD2 = LD2_Pin;
-static constexpr uint16_t LD3 = LD3_Pin;
-static constexpr uint16_t LD4 = LD4_Pin;
+namespace{
+	static TaskHandle_t handleSenderTask, handleReceiverTask;
+	static QueueHandle_t handleQ;
+	static constexpr uint32_t queueLength = 5;
+	const uint32_t timeout{};
+}
 
-static TaskHandle_t handleLD2, handleLD3, handleLD4;
 
 void SystemClock_Config(void);
 
 
-void vLed2ControllerTask(void *vLED)
+void senderTask(void *)
 {
+	const uint32_t item {2050};
 	while(true)
 	{
-		const auto period=pdMS_TO_TICKS(1000);
-		auto lastWokenTime = xTaskGetTickCount();
-
-		//Do something that takes less than period
-		const auto dummyDelay = pdMS_TO_TICKS(500);
-		static_assert(dummyDelay<period);
-		vTaskDelay(dummyDelay);
-
-
-		vTaskDelayUntil(&lastWokenTime,period);
-		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
-
+		printf("no. items in queue: %d\n\r", (int)(queueLength-uxQueueSpacesAvailable(handleQ)));
+		xQueueSend(handleQ,&item,timeout);
+		vTaskDelay(pdMS_TO_TICKS(2000 ));
 	}
 }
 
-void vLed4ControllerTask(void *vLED)
+void receiverTask(void *)
 {
+	uint32_t itemReceived{};
 	while(true)
 	{
-		auto period=pdMS_TO_TICKS(1000);
-		auto lastWokenTime = xTaskGetTickCount();
-		vTaskDelayUntil(&lastWokenTime,period);
-		HAL_GPIO_TogglePin(GPIOA,*static_cast<uint16_t*>(vLED));
+		vTaskDelay(pdMS_TO_TICKS(500));
+		auto status= xQueueReceive(handleQ,&itemReceived,timeout);
+		if(pdPASS==status)
+		{
+			printf("Received: %lu\n\r", itemReceived);
+		}
+		else if(errQUEUE_EMPTY==status)
+		{
+			printf("Error: empty queue\n\r");
+		}
+		else
+		{
+			printf("wtf!");
+		}
 
 	}
 }
@@ -56,8 +63,10 @@ int main()
 	MX_USART2_UART_Init();
 
 
-	xTaskCreate(vLed2ControllerTask,"LD2 controller task", 100,(void*)&LD2,1, &handleLD2);
-	xTaskCreate(vLed4ControllerTask,"LD4 controller task", 100,(void*)&LD4,3, &handleLD4);
+	xTaskCreate(senderTask,"sender task", 100,nullptr,1, &handleSenderTask);
+	xTaskCreate(receiverTask,"receiver task", 100,nullptr,1, &handleReceiverTask);
+
+	handleQ = xQueueCreate(queueLength,sizeof(uint32_t));
 
 	vTaskStartScheduler();
 	while (1)
@@ -76,9 +85,9 @@ int __io_putchar(int ch){
  */
 void SystemClock_Config(void)
 {
-	RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-	RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-	RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+	RCC_OscInitTypeDef RCC_OscInitStruct = {};
+	RCC_ClkInitTypeDef RCC_ClkInitStruct = {};
+	RCC_PeriphCLKInitTypeDef PeriphClkInit = {};
 
 
 	/** Initializes the RCC Oscillators according to the specified parameters
