@@ -9,46 +9,83 @@
 #include <assert.h>
 
 namespace{
-	static TaskHandle_t handleSenderTask, handleReceiverTask;
-	static QueueHandle_t handleQ;
-	static constexpr uint32_t queueLength = 5;
+	static TaskHandle_t hTemp, hFetch;
+	static QueueHandle_t sensorQ;
+	static constexpr uint16_t queueLength = 5;
 	const uint32_t timeout{};
+	static constexpr uint32_t TASK_STACK_SIZE {100};
+	enum class SENSOR{
+		TEMPERATURE,
+		HUMIDITY,
+	};
+	struct SensorReading
+	{
+		int value;
+		SENSOR sensor;
+	};
+	using Item = SensorReading;
 }
 
 
 void SystemClock_Config(void);
 
-
-void senderTask(void *)
+void tempSensorTask(void *)
 {
-	const uint32_t item {2050};
-	while(true)
-	{
-		printf("no. items in queue: %d\n\r", (int)(queueLength-uxQueueSpacesAvailable(handleQ)));
-		xQueueSend(handleQ,&item,timeout);
-		vTaskDelay(pdMS_TO_TICKS(2000 ));
+	SensorReading tempSensorReading;
+	tempSensorReading.sensor=SENSOR::TEMPERATURE;
+	tempSensorReading.value=-20;
+	while(true){
+
+		// printf("items in queue: %lu\n\r",queueLength-uxQueueSpacesAvailable(sensorQ));
+		++tempSensorReading.value;
+		auto status = xQueueSend(sensorQ,&tempSensorReading,timeout);
+		if(status!=pdPASS)
+		{
+			printf("Can't send data\n\r");
+
+		}
+		vTaskDelay(pdMS_TO_TICKS(1000 ));
 	}
 }
 
-void receiverTask(void *)
+
+void humidiySensorTask(void *)
 {
-	uint32_t itemReceived{};
+	SensorReading humidiySensorReading;
+	humidiySensorReading.sensor=SENSOR::HUMIDITY;
+	humidiySensorReading.value=0;
+	while(true){
+
+		++humidiySensorReading.value;
+		auto status = xQueueSend(sensorQ,&humidiySensorReading,timeout);
+		if(status!=pdPASS)
+		{
+			printf("Can't send data\n\r");
+
+		}
+		vTaskDelay(pdMS_TO_TICKS(1000 ));
+	}
+}
+void fetchDataTask(void *)
+{
+	SensorReading reading{};
 	while(true)
 	{
-		vTaskDelay(pdMS_TO_TICKS(500));
-		auto status= xQueueReceive(handleQ,&itemReceived,timeout);
-		if(pdPASS==status)
+		auto status = xQueueReceive(sensorQ,&reading,timeout);
+		if(status==pdPASS)
 		{
-			printf("Received: %lu\n\r", itemReceived);
+			if(reading.sensor==SENSOR::TEMPERATURE)
+			{
+				printf("Temperature reading: %d\n\r",reading.value);
+			}
+			if(reading.sensor==SENSOR::HUMIDITY)
+			{
+				printf("Humidiy reading: %d\n\r",int(reading.value));
+			}
+
 		}
-		else if(errQUEUE_EMPTY==status)
-		{
-			printf("Error: empty queue\n\r");
-		}
-		else
-		{
-			printf("wtf!");
-		}
+		// vTaskDelay(pdMS_TO_TICKS(500 ));
+
 
 	}
 }
@@ -63,10 +100,11 @@ int main()
 	MX_USART2_UART_Init();
 
 
-	xTaskCreate(senderTask,"sender task", 100,nullptr,1, &handleSenderTask);
-	xTaskCreate(receiverTask,"receiver task", 100,nullptr,1, &handleReceiverTask);
+	xTaskCreate(tempSensorTask,"temp reading", TASK_STACK_SIZE,nullptr,1, &hTemp);
+	xTaskCreate(humidiySensorTask,"humidity reading", TASK_STACK_SIZE,nullptr,1, nullptr);
+	xTaskCreate(fetchDataTask,"fetch data", TASK_STACK_SIZE,nullptr,1, &hFetch);
 
-	handleQ = xQueueCreate(queueLength,sizeof(uint32_t));
+	sensorQ = xQueueCreate(queueLength,sizeof(Item));
 
 	vTaskStartScheduler();
 	while (1)
