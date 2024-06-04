@@ -11,16 +11,16 @@
 namespace{
 	static TaskHandle_t hTemp, hFetch;
 	static QueueHandle_t sensorQ;
-	static constexpr uint16_t queueLength = 5;
-	const uint32_t timeout{};
+	static constexpr uint16_t queueLength {200} ;
+	const uint32_t waitTime{};
 	static constexpr uint32_t TASK_STACK_SIZE {100};
-	enum class SENSOR{
+	enum class SENSOR:uint8_t{
 		TEMPERATURE,
 		HUMIDITY,
 	};
 	struct SensorReading
 	{
-		int value;
+		signed char value;
 		SENSOR sensor;
 	};
 	using Item = SensorReading;
@@ -33,12 +33,12 @@ void tempSensorTask(void *)
 {
 	SensorReading tempSensorReading;
 	tempSensorReading.sensor=SENSOR::TEMPERATURE;
-	tempSensorReading.value=-20;
+	tempSensorReading.value=-20;//fake data reading
 	while(true){
 
 		// printf("items in queue: %lu\n\r",queueLength-uxQueueSpacesAvailable(sensorQ));
 		++tempSensorReading.value;
-		auto status = xQueueSend(sensorQ,&tempSensorReading,timeout);
+		auto status = xQueueSend(sensorQ,&tempSensorReading,waitTime);
 		if(status!=pdPASS)
 		{
 			printf("Can't send data\n\r");
@@ -57,7 +57,7 @@ void humidiySensorTask(void *)
 	while(true){
 
 		++humidiySensorReading.value;
-		auto status = xQueueSend(sensorQ,&humidiySensorReading,timeout);
+		auto status = xQueueSend(sensorQ,&humidiySensorReading,waitTime);
 		if(status!=pdPASS)
 		{
 			printf("Can't send data\n\r");
@@ -71,7 +71,7 @@ void fetchDataTask(void *)
 	SensorReading reading{};
 	while(true)
 	{
-		auto status = xQueueReceive(sensorQ,&reading,timeout);
+		auto status = xQueueReceive(sensorQ,&reading,waitTime);
 		if(status==pdPASS)
 		{
 			if(reading.sensor==SENSOR::TEMPERATURE)
@@ -105,6 +105,14 @@ int main()
 	xTaskCreate(fetchDataTask,"fetch data", TASK_STACK_SIZE,nullptr,1, &hFetch);
 
 	sensorQ = xQueueCreate(queueLength,sizeof(Item));
+	if(sensorQ==nullptr)
+	{
+		while(true)
+		{
+			printf("Queue can't be allocated\n\r");
+			HAL_Delay(1000);
+		}
+	}
 
 	vTaskStartScheduler();
 	while (1)
