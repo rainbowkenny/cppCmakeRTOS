@@ -9,11 +9,12 @@
 #include <assert.h>
 
 namespace{
-	static TaskHandle_t hTemp, hFetch;
-	static QueueHandle_t sensorQ;
-	static constexpr uint16_t queueLength {200} ;
-	const uint32_t waitTime{};
-	static constexpr uint32_t TASK_STACK_SIZE {100};
+	TaskHandle_t hTemp, hFetch;
+	QueueHandle_t sensorQ1,sensorQ2;
+	QueueSetHandle_t qSet;
+	constexpr uint16_t queueLength {10} ;
+	const uint32_t waitTime{portMAX_DELAY};
+	constexpr uint32_t TASK_STACK_SIZE {100};
 	enum class SENSOR:uint8_t{
 		TEMPERATURE,
 		HUMIDITY,
@@ -38,7 +39,7 @@ void tempSensorTask(void *)
 
 		// printf("items in queue: %lu\n\r",queueLength-uxQueueSpacesAvailable(sensorQ));
 		++tempSensorReading.value;
-		auto status = xQueueSend(sensorQ,&tempSensorReading,waitTime);
+		auto status = xQueueSend(sensorQ1,&tempSensorReading,waitTime);
 		if(status!=pdPASS)
 		{
 			printf("Can't send data\n\r");
@@ -57,7 +58,7 @@ void humidiySensorTask(void *)
 	while(true){
 
 		++humidiySensorReading.value;
-		auto status = xQueueSend(sensorQ,&humidiySensorReading,waitTime);
+		auto status = xQueueSend(sensorQ2,&humidiySensorReading,waitTime);
 		if(status!=pdPASS)
 		{
 			printf("Can't send data\n\r");
@@ -71,7 +72,8 @@ void fetchDataTask(void *)
 	SensorReading reading{};
 	while(true)
 	{
-		auto status = xQueueReceive(sensorQ,&reading,waitTime);
+		auto queueWithDataAvailable = xQueueSelectFromSet(qSet,waitTime);
+		auto status = xQueueReceive(queueWithDataAvailable,&reading,waitTime);
 		if(status==pdPASS)
 		{
 			if(reading.sensor==SENSOR::TEMPERATURE)
@@ -104,8 +106,15 @@ int main()
 	xTaskCreate(humidiySensorTask,"humidity reading", TASK_STACK_SIZE,nullptr,1, nullptr);
 	xTaskCreate(fetchDataTask,"fetch data", TASK_STACK_SIZE,nullptr,1, &hFetch);
 
-	sensorQ = xQueueCreate(queueLength,sizeof(Item));
-	if(sensorQ==nullptr)
+	sensorQ1 = xQueueCreate(queueLength,sizeof(Item));
+	sensorQ2 = xQueueCreate(queueLength,sizeof(Item));
+
+	qSet = xQueueCreateSet(queueLength*2);
+
+	xQueueAddToSet(sensorQ1,qSet);
+	xQueueAddToSet(sensorQ2,qSet);
+
+	if(sensorQ1==nullptr)
 	{
 		while(true)
 		{
