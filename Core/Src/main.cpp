@@ -1,5 +1,6 @@
 #include "main.h"
 #include "FreeRTOS.h"
+#include <string.h>
 #include "projdefs.h"
 #include "task.h"
 #include "queue.h"
@@ -10,7 +11,7 @@
 
 namespace{
 	TaskHandle_t hTemp, hFetch;
-	QueueHandle_t sensorQ1,sensorQ2;
+	QueueHandle_t sensorQ1,sensorQ2,heartBeatQ;
 	QueueSetHandle_t qSet;
 	constexpr uint16_t queueLength {10} ;
 	const uint32_t waitTime{portMAX_DELAY};
@@ -24,11 +25,22 @@ namespace{
 		signed char value;
 		SENSOR sensor;
 	};
+	const char* msg = "Heartbeat...\r\n";
 	using Item = SensorReading;
 }
 
 
 void SystemClock_Config(void);
+
+void heartBeatTask(void *)
+{
+	while(true)
+	{
+		xQueueSend(heartBeatQ,&msg,waitTime);
+		vTaskDelay(pdMS_TO_TICKS(200));
+	}
+
+}
 
 void tempSensorTask(void *)
 {
@@ -70,21 +82,28 @@ void humidiySensorTask(void *)
 void fetchDataTask(void *)
 {
 	SensorReading reading{};
+	char* message;
 	while(true)
 	{
 		auto queueWithDataAvailable = xQueueSelectFromSet(qSet,waitTime);
-		auto status = xQueueReceive(queueWithDataAvailable,&reading,waitTime);
+		auto status = xQueueReceive(queueWithDataAvailable,&message,waitTime);
+		// auto status = xQueueReceive(heartBeatQ,&message,waitTime);
 		if(status==pdPASS)
 		{
-			if(reading.sensor==SENSOR::TEMPERATURE)
-			{
-				printf("Temperature reading: %d\n\r",reading.value);
-			}
-			if(reading.sensor==SENSOR::HUMIDITY)
-			{
-				printf("Humidiy reading: %d\n\r",int(reading.value));
-			}
+			// if(reading.sensor==SENSOR::TEMPERATURE)
+			// {
+			//	printf("Temperature reading: %d\n\r",reading.value);
+			// }
+			// if(reading.sensor==SENSOR::HUMIDITY)
+			// {
+			//	printf("Humidiy reading: %d\n\r",int(reading.value));
+			// }
+			// else
+			// {
 
+			// }
+
+			printf(message);
 		}
 		// vTaskDelay(pdMS_TO_TICKS(500 ));
 
@@ -102,19 +121,22 @@ int main()
 	MX_USART2_UART_Init();
 
 
-	xTaskCreate(tempSensorTask,"temp reading", TASK_STACK_SIZE,nullptr,1, &hTemp);
-	xTaskCreate(humidiySensorTask,"humidity reading", TASK_STACK_SIZE,nullptr,1, nullptr);
+	// xTaskCreate(tempSensorTask,"temp reading", TASK_STACK_SIZE,nullptr,1, &hTemp);
+	// xTaskCreate(humidiySensorTask,"humidity reading", TASK_STACK_SIZE,nullptr,1, nullptr);
+	xTaskCreate(heartBeatTask,"heartbeat task", TASK_STACK_SIZE,nullptr,1, nullptr);
 	xTaskCreate(fetchDataTask,"fetch data", TASK_STACK_SIZE,nullptr,1, &hFetch);
 
-	sensorQ1 = xQueueCreate(queueLength,sizeof(Item));
-	sensorQ2 = xQueueCreate(queueLength,sizeof(Item));
+	// sensorQ1 = xQueueCreate(queueLength,sizeof(Item));
+	// sensorQ2 = xQueueCreate(queueLength,sizeof(Item));
+	heartBeatQ = xQueueCreate(1,sizeof(char*));
 
-	qSet = xQueueCreateSet(queueLength*2);
+	qSet = xQueueCreateSet(2*1);
 
-	xQueueAddToSet(sensorQ1,qSet);
-	xQueueAddToSet(sensorQ2,qSet);
+	// xQueueAddToSet(sensorQ1,qSet);
+	// xQueueAddToSet(sensorQ2,qSet);
+	xQueueAddToSet(heartBeatQ,qSet);
 
-	if(sensorQ1==nullptr)
+	if(heartBeatQ==nullptr)
 	{
 		while(true)
 		{
