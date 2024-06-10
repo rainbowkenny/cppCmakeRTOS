@@ -40,8 +40,8 @@ static int buf[BUF_SIZE];             // Shared buffer
 static int head = 0;                  // Writing index to buffer
 static int tail = 0;                  // Reading index to buffer
 static SemaphoreHandle_t bin_sem;     // Waits for parameter to be read
-int taken{0};
-int given{0};
+int task2Ran{0};
+int task1Ran{0};
 
 
 
@@ -98,8 +98,8 @@ void debug(void*)
 	while(true)
 	{
 
-		printf("given:%d\r\n",given);
-		printf("taken:%d\r\n",taken);
+		printf("task1 ran:%dtimes\r\n",task1Ran);
+		printf("task2 ran:%dtimes\r\n",task2Ran);
 		vTaskDelay(pdMS_TO_TICKS(1000));
 
 	}
@@ -110,14 +110,13 @@ void debug(void*)
 void task1(void*)
 {
 	// xSemaphoreGive(bin_sem);
+	xSemaphoreGive(bin_sem);
 	for(int i=0;i<3;i++)
 	{
-		auto status=xSemaphoreGive(bin_sem);
-		if(status==pdPASS)
-		{
-			given++;
-		}
-		vTaskDelay(pdMS_TO_TICKS(100));
+		xSemaphoreTake(bin_sem, portMAX_DELAY);
+		task1Ran++;
+		xSemaphoreGive(bin_sem);
+		// vTaskDelay(pdMS_TO_TICKS(100));
 	}
 	// printf("%d\r\n",signal);
 	vTaskDelete(nullptr);
@@ -128,8 +127,8 @@ void task2(void*)
 	for(int i=0;i<10;i++)
 	{
 		xSemaphoreTake(bin_sem, portMAX_DELAY);
-		taken++;
-		// xSemaphoreGive(bin_sem);
+		task2Ran++;
+		xSemaphoreGive(bin_sem);
 		// vTaskDelay(pdMS_TO_TICKS(100));
 	}
 	vTaskDelete(nullptr);
