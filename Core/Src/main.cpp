@@ -98,8 +98,6 @@ void debug(void*)
 	while(true)
 	{
 
-		printf("task1 ran:%dtimes\r\n",task1Ran);
-		printf("task2 ran:%dtimes\r\n",task2Ran);
 		vTaskDelay(pdMS_TO_TICKS(1000));
 
 	}
@@ -109,29 +107,24 @@ void debug(void*)
 
 void task1(void*)
 {
-	// xSemaphoreGive(bin_sem);
 	xSemaphoreGive(bin_sem);
-	for(int i=0;i<3;i++)
+	while(true)
 	{
 		xSemaphoreTake(bin_sem, portMAX_DELAY);
-		task1Ran++;
+		printf("task1 ran:%d times\r\n",task1Ran++);
 		xSemaphoreGive(bin_sem);
-		// vTaskDelay(pdMS_TO_TICKS(100));
+		vTaskDelay(pdMS_TO_TICKS(100));
 	}
-	// printf("%d\r\n",signal);
-	vTaskDelete(nullptr);
 }
 void task2(void*)
 {
-	// xSemaphoreGive(bin_sem);
-	for(int i=0;i<10;i++)
+	while(true)
 	{
 		xSemaphoreTake(bin_sem, portMAX_DELAY);
-		task2Ran++;
+		printf("task2 ran:%d times\r\n",task2Ran++);
 		xSemaphoreGive(bin_sem);
-		// vTaskDelay(pdMS_TO_TICKS(100));
+		vTaskDelay(pdMS_TO_TICKS(100));
 	}
-	vTaskDelete(nullptr);
 }
 
 int main()
