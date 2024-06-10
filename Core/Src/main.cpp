@@ -3,114 +3,137 @@
 #include <string.h>
 #include "projdefs.h"
 #include "task.h"
-#include "queue.h"
+#include "semphr.h"
 #include "usart.h"
 #include "gpio.h"
 #include <stdio.h>
 #include <assert.h>
 
-namespace{
-	TaskHandle_t hTemp, hFetch;
-	QueueHandle_t sensorQ1,sensorQ2,heartBeatQ;
-	QueueSetHandle_t qSet;
-	constexpr uint16_t queueLength {10} ;
-	const uint32_t waitTime{portMAX_DELAY};
-	constexpr uint32_t TASK_STACK_SIZE {100};
-	enum class SENSOR:uint8_t{
-		TEMPERATURE,
-		HUMIDITY,
-	};
-	struct SensorReading
-	{
-		signed char value;
-		SENSOR sensor;
-	};
-	const char* msg = "Heartbeat...\r\n";
-	using Item = SensorReading;
-}
+/**
+ * FreeRTOS Counting Semaphore Challenge
+ *
+ * Challenge: use a mutex and counting semaphores to protect the shared buffer
+ * so that each number (0 throguh 4) is printed exactly 3 times to the Serial
+ * monitor (in any order). Do not use queues to do this!
+ *
+ * Hint: you will need 2 counting semaphores in addition to the mutex, one for
+ * remembering number of filled slots in the buffer and another for
+ * remembering the number of empty slots in the buffer.
+ *
+ * Date: January 24, 2021
+ * Author: Shawn Hymel
+ * License: 0BSD
+ */
+
+// You'll likely need this on vanilla FreeRTOS
+
+
+// Settings
+static constexpr uint8_t BUF_SIZE = 5;                  // Size of buffer array
+static const int num_prod_tasks = 3;  // Number of producer tasks
+static const int prodTaskSize = 50;  // Number of producer tasks
+static const int num_cons_tasks = 2;  // Number of consumer tasks
+static const int num_writes = 3;      // Num times each producer writes to buf
+
+// Globals
+static int buf[BUF_SIZE];             // Shared buffer
+static int head = 0;                  // Writing index to buffer
+static int tail = 0;                  // Reading index to buffer
+static SemaphoreHandle_t bin_sem;     // Waits for parameter to be read
+int taken{0};
+int given{0};
+
 
 
 void SystemClock_Config(void);
 
-void heartBeatTask(void *)
+//*****************************************************************************
+// Tasks
+
+// Producer: write a given number of times to shared buffer
+void producer(void *parameters) {
+
+	int num = *(int *)parameters;
+
+
+	for (int i = 0; i < num_writes; i++) {
+
+		buf[head] = num;
+		head = (head + 1) % BUF_SIZE;
+	}
+	auto status = xSemaphoreGive(bin_sem);
+	if(pdPASS==status)
+	{
+		printf("give success\n\r");
+	}
+	else
+	{
+		printf("give fail\n\r");
+
+	}
+	// vTaskDelete(NULL);
+	// while(true){
+
+	//	vTaskDelay(pdMS_TO_TICKS(1000));
+	// };
+}
+
+void consumer(void *) {
+
+	int val;
+
+	// Read from buffer
+	while (1) {
+
+		// Critical section (accessing shared buffer and Serial)
+		val = buf[tail];
+		tail = (tail + 1) % BUF_SIZE;
+		printf("%d\n\r",val);
+	}
+	vTaskDelay(pdMS_TO_TICKS(1000));
+}
+
+void debug(void*)
 {
 	while(true)
 	{
-		xQueueSend(heartBeatQ,&msg,waitTime);
-		vTaskDelay(pdMS_TO_TICKS(200));
+
+		printf("given:%d\r\n",given);
+		printf("taken:%d\r\n",taken);
+		vTaskDelay(pdMS_TO_TICKS(1000));
+
 	}
-
-}
-
-void tempSensorTask(void *)
-{
-	SensorReading tempSensorReading;
-	tempSensorReading.sensor=SENSOR::TEMPERATURE;
-	tempSensorReading.value=-20;//fake data reading
-	while(true){
-
-		// printf("items in queue: %lu\n\r",queueLength-uxQueueSpacesAvailable(sensorQ));
-		++tempSensorReading.value;
-		auto status = xQueueSend(sensorQ1,&tempSensorReading,waitTime);
-		if(status!=pdPASS)
-		{
-			printf("Can't send data\n\r");
-
-		}
-		vTaskDelay(pdMS_TO_TICKS(1000 ));
-	}
+	// vTaskDelete(nullptr);
 }
 
 
-void humidiySensorTask(void *)
+void task1(void*)
 {
-	SensorReading humidiySensorReading;
-	humidiySensorReading.sensor=SENSOR::HUMIDITY;
-	humidiySensorReading.value=0;
-	while(true){
-
-		++humidiySensorReading.value;
-		auto status = xQueueSend(sensorQ2,&humidiySensorReading,waitTime);
-		if(status!=pdPASS)
-		{
-			printf("Can't send data\n\r");
-
-		}
-		vTaskDelay(pdMS_TO_TICKS(1000 ));
-	}
-}
-void fetchDataTask(void *)
-{
-	SensorReading reading{};
-	char* message;
-	while(true)
+	// xSemaphoreGive(bin_sem);
+	for(int i=0;i<3;i++)
 	{
-		auto queueWithDataAvailable = xQueueSelectFromSet(qSet,waitTime);
-		auto status = xQueueReceive(queueWithDataAvailable,&message,waitTime);
-		// auto status = xQueueReceive(heartBeatQ,&message,waitTime);
+		auto status=xSemaphoreGive(bin_sem);
 		if(status==pdPASS)
 		{
-			// if(reading.sensor==SENSOR::TEMPERATURE)
-			// {
-			//	printf("Temperature reading: %d\n\r",reading.value);
-			// }
-			// if(reading.sensor==SENSOR::HUMIDITY)
-			// {
-			//	printf("Humidiy reading: %d\n\r",int(reading.value));
-			// }
-			// else
-			// {
-
-			// }
-
-			printf(message);
+			given++;
 		}
-		// vTaskDelay(pdMS_TO_TICKS(500 ));
-
-
+		vTaskDelay(pdMS_TO_TICKS(100));
 	}
+	// printf("%d\r\n",signal);
+	vTaskDelete(nullptr);
 }
-
+void task2(void*)
+{
+	// xSemaphoreGive(bin_sem);
+	for(int i=0;i<10;i++)
+	{
+		xSemaphoreTake(bin_sem, portMAX_DELAY);
+		taken++;
+		// xSemaphoreGive(bin_sem);
+		// vTaskDelay(pdMS_TO_TICKS(100));
+	}
+	vTaskDelete(nullptr);
+}
 
 int main()
 {
@@ -119,31 +142,64 @@ int main()
 	SystemClock_Config();
 	MX_GPIO_Init();
 	MX_USART2_UART_Init();
-
-
-	// xTaskCreate(tempSensorTask,"temp reading", TASK_STACK_SIZE,nullptr,1, &hTemp);
-	// xTaskCreate(humidiySensorTask,"humidity reading", TASK_STACK_SIZE,nullptr,1, nullptr);
-	xTaskCreate(heartBeatTask,"heartbeat task", TASK_STACK_SIZE,nullptr,1, nullptr);
-	xTaskCreate(fetchDataTask,"fetch data", TASK_STACK_SIZE,nullptr,1, &hFetch);
-
-	// sensorQ1 = xQueueCreate(queueLength,sizeof(Item));
-	// sensorQ2 = xQueueCreate(queueLength,sizeof(Item));
-	heartBeatQ = xQueueCreate(1,sizeof(char*));
-
-	qSet = xQueueCreateSet(2*1);
-
-	// xQueueAddToSet(sensorQ1,qSet);
-	// xQueueAddToSet(sensorQ2,qSet);
-	xQueueAddToSet(heartBeatQ,qSet);
-
-	if(heartBeatQ==nullptr)
-	{
-		while(true)
-		{
-			printf("Queue can't be allocated\n\r");
-			HAL_Delay(1000);
-		}
+	printf("---FreeRTOS Semaphore Alternate Solution---\r\n");
+	bin_sem = xSemaphoreCreateBinary();
+	if(bin_sem){
+		printf("bin_sem created\n\r");
 	}
+	// char task_name[12];
+	// Wait a moment to start (so we don't miss Serial output)
+
+	// for (int i = 0; i < num_prod_tasks; i++) {
+	//	sprintf(task_name, "Producer %i", i);
+	//	xTaskCreate(producer,
+	//			task_name,
+	//			prodTaskSize,
+	//			(void *)&i,
+	//			1,
+	//			nullptr
+	//		   );
+	//	// printf("pending semaphore\r\n");
+	//	// xSemaphoreTake(bin_sem, portMAX_DELAY);
+	// }
+
+	// Start consumer tasks
+	// for (int i = 0; i < num_cons_tasks; i++) {
+	//	sprintf(task_name, "Consumer %i", i);
+	//	xTaskCreate(consumer,
+	//			task_name,
+	//			100,
+	//			nullptr,
+	//			1,
+	//			nullptr
+	//		   );
+	// }
+	// printf("consumer task created\n\r");
+
+	xTaskCreate(debug,
+			"debug",
+			200,
+			nullptr,
+			2,
+			nullptr
+		   );
+	xTaskCreate(task1,
+			"task1",
+			100,
+			nullptr,
+			1,
+			nullptr
+		   );
+	xTaskCreate(task2,
+			"task2",
+			100,
+			nullptr,
+			1,
+			nullptr
+		   );
+	// printf("All tasks created\n\r");
+
+	// Create mutexes and semaphores before starting tasks
 
 	vTaskStartScheduler();
 	while (1)
