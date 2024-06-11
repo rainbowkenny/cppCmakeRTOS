@@ -31,100 +31,88 @@
 // Settings
 static constexpr uint8_t BUF_SIZE = 5;                  // Size of buffer array
 static const int num_prod_tasks = 3;  // Number of producer tasks
-static const int prodTaskSize = 50;  // Number of producer tasks
 static const int num_cons_tasks = 2;  // Number of consumer tasks
 static const int num_writes = 3;      // Num times each producer writes to buf
+static const int prodStackSize = 50;
+static const int debugStackSize=200;
+static const int initStackSize=200;
 
 // Globals
 static int buf[BUF_SIZE];             // Shared buffer
 static int head = 0;                  // Writing index to buffer
 static int tail = 0;                  // Reading index to buffer
 static SemaphoreHandle_t bin_sem;     // Waits for parameter to be read
-int task2Ran{0};
-int task1Ran{0};
-
+static SemaphoreHandle_t buffer_lock;     // Waits for parameter to be read
+char task_name[12];
+static int initTaken{0};
+int counter{0};
+static int numProducers{0};
+int producerCreatedSuccess{0};
 
 
 void SystemClock_Config(void);
 
 //*****************************************************************************
-// Tasks
-
-// Producer: write a given number of times to shared buffer
-void producer(void *parameters) {
-
-	int num = *(int *)parameters;
-
-
-	for (int i = 0; i < num_writes; i++) {
-
-		buf[head] = num;
-		head = (head + 1) % BUF_SIZE;
-	}
-	auto status = xSemaphoreGive(bin_sem);
-	if(pdPASS==status)
-	{
-		printf("give success\n\r");
-	}
-	else
-	{
-		printf("give fail\n\r");
-
-	}
-	// vTaskDelete(NULL);
-	// while(true){
-
-	//	vTaskDelay(pdMS_TO_TICKS(1000));
-	// };
-}
-
-void consumer(void *) {
-
-	int val;
-
-	// Read from buffer
-	while (1) {
-
-		// Critical section (accessing shared buffer and Serial)
-		val = buf[tail];
-		tail = (tail + 1) % BUF_SIZE;
-		printf("%d\n\r",val);
-	}
-	vTaskDelay(pdMS_TO_TICKS(1000));
-}
-
 void debug(void*)
 {
 	while(true)
 	{
 
+		printf("=====================\n\r");
+		printf("counter: %d\n\r",counter);
+		printf("numProducers: %d\n\r",numProducers);
+		printf("producerCreatedSuccess: %d\n\r",producerCreatedSuccess);
+		printf("initTaken: %d\n\r",initTaken);
 		vTaskDelay(pdMS_TO_TICKS(1000));
 
 	}
-	// vTaskDelete(nullptr);
 }
 
 
-void task1(void*)
+void producer(void* pvParameters)
 {
+	int num = *(int*)pvParameters;
+
+	// xSemaphoreTake(buffer_lock);
+	for (int i=0;i<num_writes;i++)
+	{
+		buf[head]=num;
+		head=(head+1)%BUF_SIZE;
+	}
+	// xSemaphoreGive(buffer_lock);
+	numProducers++;
 	xSemaphoreGive(bin_sem);
-	while(true)
-	{
-		xSemaphoreTake(bin_sem, portMAX_DELAY);
-		printf("task1 ran:%d times\r\n",task1Ran++);
-		xSemaphoreGive(bin_sem);
-		vTaskDelay(pdMS_TO_TICKS(100));
-	}
+	vTaskDelete(nullptr);
 }
-void task2(void*)
+// void consumer(void*)
+// {
+//	while(true)
+//	{
+//		xSemaphoreTake(bin_sem, portMAX_DELAY);
+//		printf("task2 ran:%d times\r\n",task2Ran++);
+//		xSemaphoreGive(bin_sem);
+//		vTaskDelay(pdMS_TO_TICKS(100));
+//	}
+// }
+void initTask(void*)
 {
-	while(true)
-	{
-		xSemaphoreTake(bin_sem, portMAX_DELAY);
-		printf("task2 ran:%d times\r\n",task2Ran++);
-		xSemaphoreGive(bin_sem);
-		vTaskDelay(pdMS_TO_TICKS(100));
+	for ( counter = 0; counter < num_prod_tasks; counter++) {
+		sprintf(task_name, "Producer %i", counter);
+		auto ret= xTaskCreate(producer,
+				task_name,
+				prodStackSize,
+				(void *)&counter,
+				1,
+				nullptr
+				);
+		producerCreatedSuccess+=ret;
+		auto status=xSemaphoreTake(bin_sem, portMAX_DELAY);
+		if(pdPASS==status)
+		{
+			initTaken++;
+		}
 	}
+	vTaskDelete(nullptr);
 }
 
 int main()
@@ -136,24 +124,13 @@ int main()
 	MX_USART2_UART_Init();
 	printf("---FreeRTOS Semaphore Alternate Solution---\r\n");
 	bin_sem = xSemaphoreCreateBinary();
+	buffer_lock = xSemaphoreCreateBinary();
 	if(bin_sem){
 		printf("bin_sem created\n\r");
 	}
-	// char task_name[12];
 	// Wait a moment to start (so we don't miss Serial output)
+	// HAL_Delay(500);
 
-	// for (int i = 0; i < num_prod_tasks; i++) {
-	//	sprintf(task_name, "Producer %i", i);
-	//	xTaskCreate(producer,
-	//			task_name,
-	//			prodTaskSize,
-	//			(void *)&i,
-	//			1,
-	//			nullptr
-	//		   );
-	//	// printf("pending semaphore\r\n");
-	//	// xSemaphoreTake(bin_sem, portMAX_DELAY);
-	// }
 
 	// Start consumer tasks
 	// for (int i = 0; i < num_cons_tasks; i++) {
@@ -170,21 +147,14 @@ int main()
 
 	xTaskCreate(debug,
 			"debug",
-			200,
+			debugStackSize,
 			nullptr,
 			2,
 			nullptr
 		   );
-	xTaskCreate(task1,
-			"task1",
-			100,
-			nullptr,
-			1,
-			nullptr
-		   );
-	xTaskCreate(task2,
+	xTaskCreate(initTask,
 			"task2",
-			100,
+			initStackSize,
 			nullptr,
 			1,
 			nullptr
