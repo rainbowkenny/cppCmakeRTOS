@@ -29,25 +29,28 @@
 
 
 // Settings
-static constexpr uint8_t BUF_SIZE = 5;                  // Size of buffer array
-static const int num_prod_tasks = 3;  // Number of producer tasks
-static const int num_cons_tasks = 2;  // Number of consumer tasks
-static const int num_writes = 3;      // Num times each producer writes to buf
+static constexpr uint8_t BUF_SIZE = 5;
+static const int num_prod_tasks = 5;
+static const int num_cons_tasks = 2;
+static const int num_writes = 3;
 static const int prodStackSize = 50;
+static const int consStackSize = 200;
 static const int debugStackSize=200;
 static const int initStackSize=200;
 
 // Globals
-static int buf[BUF_SIZE];             // Shared buffer
-static int head = 0;                  // Writing index to buffer
-static int tail = 0;                  // Reading index to buffer
-static SemaphoreHandle_t bin_sem;     // Waits for parameter to be read
-static SemaphoreHandle_t buffer_lock;     // Waits for parameter to be read
+static int buf[BUF_SIZE];
+static int head = 0;
+static int tail = 0;
+static SemaphoreHandle_t sem_prodTask;
+static SemaphoreHandle_t mutex_buffer;
+static SemaphoreHandle_t mutex_uart;
+static SemaphoreHandle_t sem_empty;
+static SemaphoreHandle_t sem_filled;
 char task_name[12];
-static int initTaken{0};
-int counter{0};
 static int numProducers{0};
 int producerCreatedSuccess{0};
+int consumerCreatedSuccess{0};
 
 
 void SystemClock_Config(void);
@@ -58,11 +61,13 @@ void debug(void*)
 	while(true)
 	{
 
-		printf("=====================\n\r");
-		printf("counter: %d\n\r",counter);
-		printf("numProducers: %d\n\r",numProducers);
-		printf("producerCreatedSuccess: %d\n\r",producerCreatedSuccess);
-		printf("initTaken: %d\n\r",initTaken);
+
+		// xSemaphoreTake(uart_mutex,portMAX_DELAY);
+		// printf("=====================\n\r");
+		// printf("numProducers: %d\n\r",numProducers);
+		// printf("producerCreatedSuccess: %d\n\r",producerCreatedSuccess);
+		// printf("consumerCreatedSuccess: %d\n\r",consumerCreatedSuccess);
+		// xSemaphoreGive(uart_mutex);
 		vTaskDelay(pdMS_TO_TICKS(1000));
 
 	}
@@ -72,45 +77,73 @@ void debug(void*)
 void producer(void* pvParameters)
 {
 	int num = *(int*)pvParameters;
-
-	// xSemaphoreTake(buffer_lock);
+	numProducers++;
+	xSemaphoreGive(sem_prodTask);
 	for (int i=0;i<num_writes;i++)
 	{
+		xSemaphoreTake(sem_empty,portMAX_DELAY);
+		xSemaphoreTake(mutex_buffer,portMAX_DELAY);
 		buf[head]=num;
 		head=(head+1)%BUF_SIZE;
+		xSemaphoreGive(mutex_buffer);
+		xSemaphoreGive(sem_filled);
 	}
-	// xSemaphoreGive(buffer_lock);
-	numProducers++;
-	xSemaphoreGive(bin_sem);
 	vTaskDelete(nullptr);
 }
-// void consumer(void*)
-// {
-//	while(true)
-//	{
-//		xSemaphoreTake(bin_sem, portMAX_DELAY);
-//		printf("task2 ran:%d times\r\n",task2Ran++);
-//		xSemaphoreGive(bin_sem);
-//		vTaskDelay(pdMS_TO_TICKS(100));
-//	}
-// }
+
+void consumer(void*)
+{
+	consumerCreatedSuccess++;
+	while(true)
+	{
+		int value;
+		xSemaphoreTake(sem_filled,portMAX_DELAY);
+		xSemaphoreTake(mutex_buffer,portMAX_DELAY);
+		value  = buf[tail];
+		tail=(tail+1)%BUF_SIZE;
+		xSemaphoreGive(mutex_buffer);
+		xSemaphoreTake(mutex_uart,portMAX_DELAY);
+		printf("%d\n\r",value);
+		xSemaphoreGive(mutex_uart);
+		xSemaphoreGive(sem_empty);
+		vTaskDelay(pdMS_TO_TICKS(1000));
+	}
+}
 void initTask(void*)
 {
-	for ( counter = 0; counter < num_prod_tasks; counter++) {
-		sprintf(task_name, "Producer %i", counter);
+	for ( int i = 0; i < num_prod_tasks; i++) {
+		sprintf(task_name, "Producer %i", i);
 		auto ret= xTaskCreate(producer,
 				task_name,
 				prodStackSize,
-				(void *)&counter,
+				(void *)&i,
 				1,
 				nullptr
 				);
-		producerCreatedSuccess+=ret;
-		auto status=xSemaphoreTake(bin_sem, portMAX_DELAY);
-		if(pdPASS==status)
+		if(pdPASS==ret)
 		{
-			initTaken++;
+			// printf("%d\n\r",i);
 		}
+		producerCreatedSuccess+=ret;
+
+
+		//this ensures a producer task is created and run before the next one is created.
+		//It is needed so that i's value is passed to producer task before it changes
+		auto status=xSemaphoreTake(sem_prodTask, portMAX_DELAY);
+		// if(pdPASS==status)
+		// {
+		// initTaken++;
+		// }
+	}
+	for ( int i = 0; i < num_cons_tasks; i++) {
+		sprintf(task_name, "Consumer %i", i);
+		auto ret= xTaskCreate(consumer,
+				task_name,
+				consStackSize,
+				nullptr,
+				1,
+				nullptr
+				);
 	}
 	vTaskDelete(nullptr);
 }
@@ -123,27 +156,14 @@ int main()
 	MX_GPIO_Init();
 	MX_USART2_UART_Init();
 	printf("---FreeRTOS Semaphore Alternate Solution---\r\n");
-	bin_sem = xSemaphoreCreateBinary();
-	buffer_lock = xSemaphoreCreateBinary();
-	if(bin_sem){
+	sem_prodTask = xSemaphoreCreateBinary();
+	sem_empty = xSemaphoreCreateCounting(BUF_SIZE,BUF_SIZE);
+	sem_filled = xSemaphoreCreateCounting(BUF_SIZE,0);
+	mutex_buffer = xSemaphoreCreateMutex();
+	mutex_uart = xSemaphoreCreateMutex();
+	if(sem_prodTask){
 		printf("bin_sem created\n\r");
 	}
-	// Wait a moment to start (so we don't miss Serial output)
-	// HAL_Delay(500);
-
-
-	// Start consumer tasks
-	// for (int i = 0; i < num_cons_tasks; i++) {
-	//	sprintf(task_name, "Consumer %i", i);
-	//	xTaskCreate(consumer,
-	//			task_name,
-	//			100,
-	//			nullptr,
-	//			1,
-	//			nullptr
-	//		   );
-	// }
-	// printf("consumer task created\n\r");
 
 	xTaskCreate(debug,
 			"debug",
@@ -159,9 +179,6 @@ int main()
 			1,
 			nullptr
 		   );
-	// printf("All tasks created\n\r");
-
-	// Create mutexes and semaphores before starting tasks
 
 	vTaskStartScheduler();
 	while (1)
