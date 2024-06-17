@@ -12,6 +12,7 @@
 namespace{
 
 	TimerHandle_t timer1,timer2,timer3;
+	uint8_t timerId1{1},timerId3{3};
 }
 
 void ledCallback(TimerHandle_t xTimer);
@@ -32,7 +33,7 @@ int main()
 	MX_GPIO_Init();
 	MX_USART2_UART_Init();
 	// uint8_t timerId1{1},timerId2{2};
-	timer1 =xTimerCreate("timer1",pdMS_TO_TICKS(1000),pdTRUE,nullptr,ledCallback);
+	timer1 =xTimerCreate("timer1",pdMS_TO_TICKS(1000),pdTRUE,&timerId1,ledCallback);
 	if(!timer1){
 		printf("timer1 creation failed\n\r");
 	}
@@ -40,7 +41,7 @@ int main()
 	if(!timer2){
 		printf("timer2 creation failed\n\r");
 	}
-	timer3 =xTimerCreate("timer3",pdMS_TO_TICKS(500),pdTRUE,nullptr,ledCallback);
+	timer3 =xTimerCreate("timer3",pdMS_TO_TICKS(500),pdTRUE,&timerId3,ledCallback);
 	xTimerStart(timer1,portMAX_DELAY);
 	xTimerStart(timer2,portMAX_DELAY);
 	xTimerStart(timer3,portMAX_DELAY);
@@ -53,9 +54,9 @@ int main()
 }
 void ledCallback(TimerHandle_t xTimer)
 {
-	if(timer1==xTimer)
+	if(timerId1==*(static_cast<uint8_t*>(pvTimerGetTimerID(xTimer))))
 		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-	if (timer3==xTimer)
+	if(timerId3==*(static_cast<uint8_t*>(pvTimerGetTimerID(xTimer))))
 		HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
 
 }
