@@ -3,95 +3,28 @@
 #include "projdefs.h"
 #include "task.h"
 #include "queue.h"
+#include "timers.h"
 #include "usart.h"
 #include "gpio.h"
 #include <stdio.h>
 #include <assert.h>
 
 namespace{
-	TaskHandle_t hTemp, hFetch;
-	QueueHandle_t sensorQ1,sensorQ2;
-	QueueSetHandle_t qSet;
-	constexpr uint16_t queueLength {10} ;
-	const uint32_t waitTime{portMAX_DELAY};
-	constexpr uint32_t TASK_STACK_SIZE {100};
-	enum class SENSOR:uint8_t{
-		TEMPERATURE,
-		HUMIDITY,
-	};
-	struct SensorReading
-	{
-		signed char value;
-		SENSOR sensor;
-	};
-	using Item = SensorReading;
+
 }
+
+void prvTimerCallback(TimerHandle_t xTimer)
+{
+	HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+}
+void callback2(TimerHandle_t )
+{
+	printf("heart beat\n\r");
+}
+
 
 
 void SystemClock_Config(void);
-
-void tempSensorTask(void *)
-{
-	SensorReading tempSensorReading;
-	tempSensorReading.sensor=SENSOR::TEMPERATURE;
-	tempSensorReading.value=-20;//fake data reading
-	while(true){
-
-		// printf("items in queue: %lu\n\r",queueLength-uxQueueSpacesAvailable(sensorQ));
-		++tempSensorReading.value;
-		auto status = xQueueSend(sensorQ1,&tempSensorReading,waitTime);
-		if(status!=pdPASS)
-		{
-			printf("Can't send data\n\r");
-
-		}
-		vTaskDelay(pdMS_TO_TICKS(1000 ));
-	}
-}
-
-
-void humidiySensorTask(void *)
-{
-	SensorReading humidiySensorReading;
-	humidiySensorReading.sensor=SENSOR::HUMIDITY;
-	humidiySensorReading.value=0;
-	while(true){
-
-		++humidiySensorReading.value;
-		auto status = xQueueSend(sensorQ2,&humidiySensorReading,waitTime);
-		if(status!=pdPASS)
-		{
-			printf("Can't send data\n\r");
-
-		}
-		vTaskDelay(pdMS_TO_TICKS(1000 ));
-	}
-}
-void fetchDataTask(void *)
-{
-	SensorReading reading{};
-	while(true)
-	{
-		auto queueWithDataAvailable = xQueueSelectFromSet(qSet,waitTime);
-		auto status = xQueueReceive(queueWithDataAvailable,&reading,waitTime);
-		if(status==pdPASS)
-		{
-			if(reading.sensor==SENSOR::TEMPERATURE)
-			{
-				printf("Temperature reading: %d\n\r",reading.value);
-			}
-			if(reading.sensor==SENSOR::HUMIDITY)
-			{
-				printf("Humidiy reading: %d\n\r",int(reading.value));
-			}
-
-		}
-		// vTaskDelay(pdMS_TO_TICKS(500 ));
-
-
-	}
-}
-
 
 int main()
 {
@@ -100,29 +33,20 @@ int main()
 	SystemClock_Config();
 	MX_GPIO_Init();
 	MX_USART2_UART_Init();
-
-
-	xTaskCreate(tempSensorTask,"temp reading", TASK_STACK_SIZE,nullptr,1, &hTemp);
-	xTaskCreate(humidiySensorTask,"humidity reading", TASK_STACK_SIZE,nullptr,1, nullptr);
-	xTaskCreate(fetchDataTask,"fetch data", TASK_STACK_SIZE,nullptr,1, &hFetch);
-
-	sensorQ1 = xQueueCreate(queueLength,sizeof(Item));
-	sensorQ2 = xQueueCreate(queueLength,sizeof(Item));
-
-	qSet = xQueueCreateSet(queueLength*2);
-
-	xQueueAddToSet(sensorQ1,qSet);
-	xQueueAddToSet(sensorQ2,qSet);
-
-	if(sensorQ1==nullptr)
-	{
-		while(true)
-		{
-			printf("Queue can't be allocated\n\r");
-			HAL_Delay(1000);
-		}
+	uint8_t timerId1{1},timerId2{2};
+	// auto timer1 =xTimerCreate("timer1",pdMS_TO_TICKS(1000),pdTRUE,nullptr,callback1);
+	auto timer1 =xTimerCreate("timer1",pdMS_TO_TICKS(1000),pdTRUE,nullptr,prvTimerCallback);
+	if(!timer1){
+		printf("timer1 creation failed\n\r");
 	}
+	auto timer2 =xTimerCreate("timer2",pdMS_TO_TICKS(1000),pdTRUE,nullptr,callback2);
+	if(!timer2){
+		printf("timer2 creation failed\n\r");
+	}
+	xTimerStart(timer1,portMAX_DELAY);
+	xTimerStart(timer2,portMAX_DELAY);
 
+	printf("start\r\n");
 	vTaskStartScheduler();
 	while (1)
 	{
