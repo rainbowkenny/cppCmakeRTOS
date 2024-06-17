@@ -11,13 +11,11 @@
 
 namespace{
 
+	TimerHandle_t timer1,timer2,timer3;
 }
 
-void prvTimerCallback(TimerHandle_t xTimer)
-{
-	HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-}
-void callback2(TimerHandle_t )
+void ledCallback(TimerHandle_t xTimer);
+void uartCallback(TimerHandle_t )
 {
 	printf("heart beat\n\r");
 }
@@ -33,24 +31,33 @@ int main()
 	SystemClock_Config();
 	MX_GPIO_Init();
 	MX_USART2_UART_Init();
-	uint8_t timerId1{1},timerId2{2};
-	// auto timer1 =xTimerCreate("timer1",pdMS_TO_TICKS(1000),pdTRUE,nullptr,callback1);
-	auto timer1 =xTimerCreate("timer1",pdMS_TO_TICKS(1000),pdTRUE,nullptr,prvTimerCallback);
+	// uint8_t timerId1{1},timerId2{2};
+	timer1 =xTimerCreate("timer1",pdMS_TO_TICKS(1000),pdTRUE,nullptr,ledCallback);
 	if(!timer1){
 		printf("timer1 creation failed\n\r");
 	}
-	auto timer2 =xTimerCreate("timer2",pdMS_TO_TICKS(1000),pdTRUE,nullptr,callback2);
+	timer2 =xTimerCreate("timer2",pdMS_TO_TICKS(1000),pdTRUE,nullptr,uartCallback);
 	if(!timer2){
 		printf("timer2 creation failed\n\r");
 	}
+	timer3 =xTimerCreate("timer3",pdMS_TO_TICKS(500),pdTRUE,nullptr,ledCallback);
 	xTimerStart(timer1,portMAX_DELAY);
 	xTimerStart(timer2,portMAX_DELAY);
+	xTimerStart(timer3,portMAX_DELAY);
 
 	printf("start\r\n");
 	vTaskStartScheduler();
 	while (1)
 	{
 	}
+}
+void ledCallback(TimerHandle_t xTimer)
+{
+	if(timer1==xTimer)
+		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+	if (timer3==xTimer)
+		HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+
 }
 
 int __io_putchar(int ch){
