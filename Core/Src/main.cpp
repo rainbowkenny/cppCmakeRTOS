@@ -3,6 +3,7 @@
 #include "projdefs.h"
 #include "task.h"
 #include "queue.h"
+#include "semphr.h"
 #include "timers.h"
 #include "usart.h"
 #include "gpio.h"
@@ -10,20 +11,50 @@
 #include <assert.h>
 
 namespace{
-
-	TimerHandle_t timer1,timer2,timer3;
-	uint8_t timerId1{1},timerId3{3};
+	constexpr uint8_t BUF_SIZE{200};
+	constexpr uint8_t CMD_LEN{2};
+	constexpr uint16_t defaultStackSize{100};
+	constexpr uint16_t defaultPriority{1};
+	uint8_t cmdBuf[BUF_SIZE] ;
+	TaskHandle_t cmdTask{nullptr};
+	TaskHandle_t handlerTask{nullptr};
+	SemaphoreHandle_t mutex{nullptr};
 }
-
-void ledCallback(TimerHandle_t xTimer);
-void uartCallback(TimerHandle_t )
-{
-	printf("heart beat\n\r");
-}
-
-
 
 void SystemClock_Config(void);
+
+void getCommand(void*)
+{
+	while(true){
+		auto status = HAL_UART_Receive_IT(&huart2,cmdBuf,CMD_LEN);
+		if(status==HAL_OK)
+		{
+			xSemaphoreTake(mutex,portMAX_DELAY);
+			printf("Rx OK\r\n");
+			xSemaphoreGive(mutex);
+		}
+		if(status==HAL_BUSY)
+		{
+			xSemaphoreTake(mutex,portMAX_DELAY);
+			printf("Receive busy, still waiting for all characters to be received\r\n");
+			xSemaphoreGive(mutex);
+		}
+		vTaskDelay(pdMS_TO_TICKS(1000));
+	}
+}
+
+void handleCommand(void*)
+{
+	while(1)
+	{
+		xSemaphoreTake(mutex,portMAX_DELAY);
+		printf("Buffer: %s\r\n",cmdBuf);
+		xSemaphoreGive(mutex);
+		vTaskDelay(pdMS_TO_TICKS(1000));
+	}
+}
+
+
 
 int main()
 {
@@ -32,37 +63,33 @@ int main()
 	SystemClock_Config();
 	MX_GPIO_Init();
 	MX_USART2_UART_Init();
-	// uint8_t timerId1{1},timerId2{2};
-	timer1 =xTimerCreate("timer1",pdMS_TO_TICKS(1000),pdTRUE,&timerId1,ledCallback);
-	if(!timer1){
-		printf("timer1 creation failed\n\r");
+
+	mutex=xSemaphoreCreateMutex();
+	if(nullptr==mutex)
+	{
+		printf("mutex not created\r\n");
 	}
-	timer2 =xTimerCreate("timer2",pdMS_TO_TICKS(1000),pdTRUE,nullptr,uartCallback);
-	if(!timer2){
-		printf("timer2 creation failed\n\r");
-	}
-	timer3 =xTimerCreate("timer3",pdMS_TO_TICKS(500),pdTRUE,&timerId3,ledCallback);
-	xTimerStart(timer1,portMAX_DELAY);
-	xTimerStart(timer2,portMAX_DELAY);
-	xTimerStart(timer3,portMAX_DELAY);
 
 	printf("start\r\n");
+	auto status = xTaskCreate(getCommand,"cmd task",defaultStackSize,nullptr,defaultPriority,&cmdTask);
+	if(status!=pdPASS){
+		printf("cmd task creation failed\r\n");
+		// printf("status: %ld\r\n",status);
+	};
+	status = xTaskCreate(handleCommand,"handler task",defaultStackSize,nullptr,defaultPriority,&handlerTask);
+	if(status!=pdPASS){
+		printf("handler task creation failed\r\n");
+	};
+
+
 	vTaskStartScheduler();
 	while (1)
 	{
 	}
 }
-void ledCallback(TimerHandle_t xTimer)
-{
-	if(timerId1==*(static_cast<uint8_t*>(pvTimerGetTimerID(xTimer))))
-		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-	if(timerId3==*(static_cast<uint8_t*>(pvTimerGetTimerID(xTimer))))
-		HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
-
-}
 
 int __io_putchar(int ch){
-	HAL_UART_Transmit(&huart2,(uint8_t*)&ch,1,0xffff);
+	HAL_UART_Transmit(&huart2,(uint8_t*)&ch,1,HAL_MAX_DELAY);
 	return ch;
 }
 
