@@ -9,57 +9,65 @@
 #include "gpio.h"
 #include <stdio.h>
 #include <assert.h>
-#include <string.h>
+#include <cstring>
 
 namespace{
 	constexpr uint8_t CMD_BUF_SIZE{10};
 	constexpr uint16_t defaultStackSize{200};
 	constexpr uint16_t defaultPriority{1};
-	uint8_t cmdBuf[CMD_BUF_SIZE] ;
+	char cmdBuf[CMD_BUF_SIZE] ;
 	uint8_t tempBuf[1] ;
-	TaskHandle_t cmdTask{nullptr};
 	TaskHandle_t handlerTask{nullptr};
 	SemaphoreHandle_t mutex{nullptr};
 	SemaphoreHandle_t printSem{nullptr};
 	QueueHandle_t rawCmdQueue;
 	uint8_t counter{0};
-	uint8_t i{0};
 }
 
 void SystemClock_Config(void);
 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *)
 {
 
 	BaseType_t pxHigherPriorityTaskWoken{pdTRUE};
-	// xSemaphoreGiveFromISR(printSem,&pxHigherPriorityTaskWoken);
 	xQueueSendFromISR(rawCmdQueue,tempBuf,&pxHigherPriorityTaskWoken);
 
-	// cmdBuf[i]=tempBuf[0];//copy the received character to the cmd buffer
-	// i=(++i)%CMD_BUF_SIZE;
 
 	counter ++;
 	HAL_UART_Receive_IT(&huart2,tempBuf,1);//restart interrupt and receive new character
 
+	//Following two lines don't seem to be needed....
 	// BaseType_t xHigherPriorityTaskWoken{pdFALSE};
 	// portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 void handleCommand(void*)
 {
+	size_t i{0};
 	while(1)
 	{
-		// xSemaphoreTake(printSem,portMAX_DELAY);
 		char charReceived;
 		xQueueReceive(rawCmdQueue,&charReceived,portMAX_DELAY);
+		cmdBuf[i]=charReceived;//add the received character to the cmd buffer
+		i=(i+1)%CMD_BUF_SIZE;
 		xSemaphoreTake(mutex,portMAX_DELAY);
-		// printf("Buffer: %s\r\n",cmdBuf);
+		printf("Buffer: %s\r\n",cmdBuf);
 		printf("Char received: %c\r\n",charReceived);
 		printf("Counter: %d\r\n",counter);
 		xSemaphoreGive(mutex);
 		if('\r'==charReceived)
 		{
-			HAL_GPIO_TogglePin(LD2_GPIO_Port,LD2_Pin);
+			if(strcmp("on\r",cmdBuf)==0)
+			{
+				HAL_GPIO_WritePin(LD2_GPIO_Port,LD2_Pin,GPIO_PIN_SET);
+			}
+			if(strcmp("off\r",cmdBuf)==0)
+			{
+				HAL_GPIO_WritePin(LD2_GPIO_Port,LD2_Pin,GPIO_PIN_RESET);
+			}
+			memset(cmdBuf,'\0',sizeof(cmdBuf));
+			i=0;
+
 		}
 
 	}
