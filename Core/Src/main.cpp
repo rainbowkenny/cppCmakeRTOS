@@ -2,9 +2,6 @@
 #include "FreeRTOS.h"
 #include "projdefs.h"
 #include "task.h"
-#include "queue.h"
-#include "semphr.h"
-#include "timers.h"
 #include "event_groups.h"
 #include "usart.h"
 #include "gpio.h"
@@ -17,7 +14,7 @@ namespace{
 	EventGroupHandle_t  events{nullptr};
 	const EventBits_t task1_bit{1ul<<1};
 	const EventBits_t task2_bit{1ul<<2};
-	constexpr uint8_t defaultStack{200};
+	constexpr uint8_t defaultStack{100};
 	constexpr uint8_t defaultPriority{1};
 }
 
@@ -47,8 +44,6 @@ void listenTask(void*)
 		EventBits_t flags = task1_bit|task2_bit;
 		auto event=xEventGroupWaitBits(events,flags,pdTRUE,pdFALSE,portMAX_DELAY);
 		// printf("event:%lu\r\n",event);
-		// printf("event|task2:%lu\r\n",event&task2_bit);
-		printf("event:%lu\r\n",event);
 		if((event&task1_bit)!=0)
 		{
 			printf("bit 1 set\r\n");
@@ -58,6 +53,7 @@ void listenTask(void*)
 			printf("bit 2 set\r\n");
 		}
 
+		vTaskDelay(pdMS_TO_TICKS(200));
 	}
 }
 int main()
@@ -69,6 +65,11 @@ int main()
 	MX_USART2_UART_Init();
 
 	events=xEventGroupCreate();
+	if(events)
+	{
+		printf("group created\r\n");
+	}
+
 	xTaskCreate(task1,"task1",defaultStack,nullptr,defaultPriority,nullptr);
 	xTaskCreate(task2,"task2",defaultStack,nullptr,defaultPriority,nullptr);
 	xTaskCreate(listenTask,"listen",defaultStack,nullptr,defaultPriority,nullptr);
