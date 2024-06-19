@@ -21,6 +21,7 @@ namespace{
 	TaskHandle_t handlerTask{nullptr};
 	SemaphoreHandle_t mutex{nullptr};
 	SemaphoreHandle_t printSem{nullptr};
+	QueueHandle_t rawCmdQueue;
 	uint8_t counter{0};
 	uint8_t i{0};
 }
@@ -31,9 +32,12 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 
 	BaseType_t pxHigherPriorityTaskWoken{pdTRUE};
-	xSemaphoreGiveFromISR(printSem,&pxHigherPriorityTaskWoken);
-	cmdBuf[i]=tempBuf[0];//copy the received character to the cmd buffer
-	i=(++i)%CMD_BUF_SIZE;
+	// xSemaphoreGiveFromISR(printSem,&pxHigherPriorityTaskWoken);
+	xQueueSendFromISR(rawCmdQueue,tempBuf,&pxHigherPriorityTaskWoken);
+
+	// cmdBuf[i]=tempBuf[0];//copy the received character to the cmd buffer
+	// i=(++i)%CMD_BUF_SIZE;
+
 	counter ++;
 	HAL_UART_Receive_IT(&huart2,tempBuf,1);//restart interrupt and receive new character
 
@@ -45,11 +49,19 @@ void handleCommand(void*)
 {
 	while(1)
 	{
-		xSemaphoreTake(printSem,portMAX_DELAY);
+		// xSemaphoreTake(printSem,portMAX_DELAY);
+		char charReceived;
+		xQueueReceive(rawCmdQueue,&charReceived,portMAX_DELAY);
 		xSemaphoreTake(mutex,portMAX_DELAY);
-		printf("Buffer: %s\r\n",cmdBuf);
+		// printf("Buffer: %s\r\n",cmdBuf);
+		printf("Char received: %c\r\n",charReceived);
 		printf("Counter: %d\r\n",counter);
 		xSemaphoreGive(mutex);
+		if('\r'==charReceived)
+		{
+			HAL_GPIO_TogglePin(LD2_GPIO_Port,LD2_Pin);
+		}
+
 	}
 }
 
@@ -65,6 +77,7 @@ int main()
 
 	mutex=xSemaphoreCreateMutex();
 	printSem=xSemaphoreCreateBinary();
+	rawCmdQueue=xQueueCreate(CMD_BUF_SIZE,sizeof(uint8_t));
 	if(!mutex)
 	{
 		printf("mutex not created\r\n");
