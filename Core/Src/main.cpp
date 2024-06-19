@@ -19,8 +19,6 @@ namespace{
 	const EventBits_t task2_bit{1ul<<2};
 	constexpr uint8_t defaultStack{200};
 	constexpr uint8_t defaultPriority{1};
-	TaskHandle_t task1handle{nullptr};
-	TaskHandle_t listenHandle{nullptr};
 }
 
 void SystemClock_Config(void);
@@ -31,6 +29,16 @@ void task1(void*)
 	{
 		xEventGroupSetBits(events,task1_bit);
 		vTaskDelay(pdMS_TO_TICKS(1000));
+		xEventGroupSetBits(events,task2_bit);
+		vTaskDelay(pdMS_TO_TICKS(500));
+	}
+}
+void task2(void*)
+{
+	while(1)
+	{
+		xEventGroupSetBits(events,task2_bit);
+		vTaskDelay(pdMS_TO_TICKS(500));
 	}
 }
 
@@ -38,8 +46,18 @@ void listenTask(void*)
 {
 	while(1)
 	{
-		xEventGroupWaitBits(events,task1_bit,pdTRUE,pdFALSE,portMAX_DELAY);
-		printf("set\r\n");
+		auto event=xEventGroupWaitBits(events,task1_bit|task2_bit,pdTRUE,pdFALSE,portMAX_DELAY);
+		// printf("event:%lu\r\n",event);
+		// printf("event|task2:%lu\r\n",event&task2_bit);
+		printf("event:%lu\r\n",event);
+		if(event&task1_bit)
+		{
+			printf("bit 1 set\r\n");
+		}
+		if(event&task2_bit)
+		{
+			printf("bit 2 set\r\n");
+		}
 
 	}
 }
@@ -52,8 +70,9 @@ int main()
 	MX_USART2_UART_Init();
 
 	events=xEventGroupCreate();
-	xTaskCreate(task1,"task1",defaultStack,nullptr,defaultPriority,&task1handle);
-	xTaskCreate(listenTask,"listen",defaultStack,nullptr,defaultPriority,&listenHandle);
+	xTaskCreate(task1,"task1",defaultStack,nullptr,defaultPriority,nullptr);
+	// xTaskCreate(task2,"task2",defaultStack,nullptr,defaultPriority,nullptr);
+	xTaskCreate(listenTask,"listen",defaultStack,nullptr,defaultPriority,nullptr);
 
 	printf("start\r\n");
 	vTaskStartScheduler();
