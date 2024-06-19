@@ -20,6 +20,7 @@ namespace{
 	TaskHandle_t cmdTask{nullptr};
 	TaskHandle_t handlerTask{nullptr};
 	SemaphoreHandle_t mutex{nullptr};
+	SemaphoreHandle_t printSem{nullptr};
 	uint8_t counter{0};
 	uint8_t i{0};
 }
@@ -28,6 +29,9 @@ void SystemClock_Config(void);
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
+
+	BaseType_t pxHigherPriorityTaskWoken{pdTRUE};
+	xSemaphoreGiveFromISR(printSem,&pxHigherPriorityTaskWoken);
 	cmdBuf[i]=tempBuf[0];//copy the received character to the cmd buffer
 	i=(++i)%CMD_BUF_SIZE;
 	counter ++;
@@ -41,11 +45,11 @@ void handleCommand(void*)
 {
 	while(1)
 	{
+		xSemaphoreTake(printSem,portMAX_DELAY);
 		xSemaphoreTake(mutex,portMAX_DELAY);
 		printf("Buffer: %s\r\n",cmdBuf);
 		printf("Counter: %d\r\n",counter);
 		xSemaphoreGive(mutex);
-		vTaskDelay(pdMS_TO_TICKS(1000));
 	}
 }
 
@@ -60,6 +64,7 @@ int main()
 	MX_USART2_UART_Init();
 
 	mutex=xSemaphoreCreateMutex();
+	printSem=xSemaphoreCreateBinary();
 	if(!mutex)
 	{
 		printf("mutex not created\r\n");
