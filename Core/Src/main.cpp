@@ -9,38 +9,32 @@
 #include "gpio.h"
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
 
 namespace{
-	constexpr uint8_t BUF_SIZE{200};
-	constexpr uint8_t CMD_LEN{2};
-	constexpr uint16_t defaultStackSize{100};
+	constexpr uint8_t CMD_BUF_SIZE{10};
+	constexpr uint16_t defaultStackSize{200};
 	constexpr uint16_t defaultPriority{1};
-	uint8_t cmdBuf[BUF_SIZE] ;
+	uint8_t cmdBuf[CMD_BUF_SIZE] ;
+	uint8_t tempBuf[1] ;
 	TaskHandle_t cmdTask{nullptr};
 	TaskHandle_t handlerTask{nullptr};
 	SemaphoreHandle_t mutex{nullptr};
+	uint8_t counter{0};
+	uint8_t i{0};
 }
 
 void SystemClock_Config(void);
 
-void getCommand(void*)
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-	while(true){
-		auto status = HAL_UART_Receive_IT(&huart2,cmdBuf,CMD_LEN);
-		if(status==HAL_OK)
-		{
-			xSemaphoreTake(mutex,portMAX_DELAY);
-			printf("Rx OK\r\n");
-			xSemaphoreGive(mutex);
-		}
-		if(status==HAL_BUSY)
-		{
-			xSemaphoreTake(mutex,portMAX_DELAY);
-			printf("Receive busy, still waiting for all characters to be received\r\n");
-			xSemaphoreGive(mutex);
-		}
-		vTaskDelay(pdMS_TO_TICKS(1000));
-	}
+	cmdBuf[i]=tempBuf[0];//copy the received character to the cmd buffer
+	i=(++i)%CMD_BUF_SIZE;
+	counter ++;
+	HAL_UART_Receive_IT(&huart2,tempBuf,1);//restart interrupt and receive new character
+
+	// BaseType_t xHigherPriorityTaskWoken{pdFALSE};
+	// portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 void handleCommand(void*)
@@ -49,6 +43,7 @@ void handleCommand(void*)
 	{
 		xSemaphoreTake(mutex,portMAX_DELAY);
 		printf("Buffer: %s\r\n",cmdBuf);
+		printf("Counter: %d\r\n",counter);
 		xSemaphoreGive(mutex);
 		vTaskDelay(pdMS_TO_TICKS(1000));
 	}
@@ -65,23 +60,14 @@ int main()
 	MX_USART2_UART_Init();
 
 	mutex=xSemaphoreCreateMutex();
-	if(nullptr==mutex)
+	if(!mutex)
 	{
 		printf("mutex not created\r\n");
 	}
 
 	printf("start\r\n");
-	auto status = xTaskCreate(getCommand,"cmd task",defaultStackSize,nullptr,defaultPriority,&cmdTask);
-	if(status!=pdPASS){
-		printf("cmd task creation failed\r\n");
-		// printf("status: %ld\r\n",status);
-	};
-	status = xTaskCreate(handleCommand,"handler task",defaultStackSize,nullptr,defaultPriority,&handlerTask);
-	if(status!=pdPASS){
-		printf("handler task creation failed\r\n");
-	};
-
-
+	xTaskCreate(handleCommand,"handler task",defaultStackSize,nullptr,defaultPriority,&handlerTask);
+	HAL_UART_Receive_IT(&huart2,tempBuf,1);
 	vTaskStartScheduler();
 	while (1)
 	{
