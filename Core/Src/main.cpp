@@ -5,6 +5,7 @@
 #include "queue.h"
 #include "semphr.h"
 #include "timers.h"
+#include "event_groups.h"
 #include "usart.h"
 #include "gpio.h"
 #include <stdio.h>
@@ -12,69 +13,36 @@
 #include <cstring>
 
 namespace{
-	constexpr uint8_t CMD_BUF_SIZE{10};
-	constexpr uint16_t defaultStackSize{200};
-	constexpr uint16_t defaultPriority{1};
-	char cmdBuf[CMD_BUF_SIZE] ;
-	uint8_t tempBuf[1] ;
-	TaskHandle_t handlerTask{nullptr};
-	SemaphoreHandle_t mutex{nullptr};
-	SemaphoreHandle_t printSem{nullptr};
-	QueueHandle_t rawCmdQueue;
-	uint8_t counter{0};
+
+	EventGroupHandle_t  events{nullptr};
+	const EventBits_t task1_bit{1ul<<1};
+	const EventBits_t task2_bit{1ul<<2};
+	constexpr uint8_t defaultStack{200};
+	constexpr uint8_t defaultPriority{1};
+	TaskHandle_t task1handle{nullptr};
+	TaskHandle_t listenHandle{nullptr};
 }
 
 void SystemClock_Config(void);
 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *)
+void task1(void*)
 {
-
-	BaseType_t pxHigherPriorityTaskWoken{pdTRUE};
-	xQueueSendFromISR(rawCmdQueue,tempBuf,&pxHigherPriorityTaskWoken);
-
-
-	counter ++;
-	HAL_UART_Receive_IT(&huart2,tempBuf,1);//restart interrupt and receive new character
-
-	//Following two lines don't seem to be needed....
-	// BaseType_t xHigherPriorityTaskWoken{pdFALSE};
-	// portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-}
-
-void handleCommand(void*)
-{
-	size_t i{0};
 	while(1)
 	{
-		char charReceived;
-		xQueueReceive(rawCmdQueue,&charReceived,portMAX_DELAY);
-		cmdBuf[i]=charReceived;//add the received character to the cmd buffer
-		i=(i+1)%CMD_BUF_SIZE;
-		xSemaphoreTake(mutex,portMAX_DELAY);
-		printf("Buffer: %s\r\n",cmdBuf);
-		printf("Char received: %c\r\n",charReceived);
-		printf("Counter: %d\r\n",counter);
-		xSemaphoreGive(mutex);
-		if('\r'==charReceived)
-		{
-			if(strcmp("on\r",cmdBuf)==0)
-			{
-				HAL_GPIO_WritePin(LD2_GPIO_Port,LD2_Pin,GPIO_PIN_SET);
-			}
-			if(strcmp("off\r",cmdBuf)==0)
-			{
-				HAL_GPIO_WritePin(LD2_GPIO_Port,LD2_Pin,GPIO_PIN_RESET);
-			}
-			memset(cmdBuf,'\0',sizeof(cmdBuf));
-			i=0;
-
-		}
-
+		xEventGroupSetBits(events,task1_bit);
+		vTaskDelay(pdMS_TO_TICKS(1000));
 	}
 }
 
+void listenTask(void*)
+{
+	while(1)
+	{
+		xEventGroupWaitBits(events,task1_bit,pdTRUE,pdFALSE,portMAX_DELAY);
+		printf("set\r\n");
 
-
+	}
+}
 int main()
 {
 
@@ -83,17 +51,11 @@ int main()
 	MX_GPIO_Init();
 	MX_USART2_UART_Init();
 
-	mutex=xSemaphoreCreateMutex();
-	printSem=xSemaphoreCreateBinary();
-	rawCmdQueue=xQueueCreate(CMD_BUF_SIZE,sizeof(uint8_t));
-	if(!mutex)
-	{
-		printf("mutex not created\r\n");
-	}
+	events=xEventGroupCreate();
+	xTaskCreate(task1,"task1",defaultStack,nullptr,defaultPriority,&task1handle);
+	xTaskCreate(listenTask,"listen",defaultStack,nullptr,defaultPriority,&listenHandle);
 
 	printf("start\r\n");
-	xTaskCreate(handleCommand,"handler task",defaultStackSize,nullptr,defaultPriority,&handlerTask);
-	HAL_UART_Receive_IT(&huart2,tempBuf,1);
 	vTaskStartScheduler();
 	while (1)
 	{
