@@ -29,8 +29,6 @@ void task1(void*)
 	{
 		xEventGroupSetBits(events,task1_bit);
 		vTaskDelay(pdMS_TO_TICKS(1000));
-		xEventGroupSetBits(events,task2_bit);
-		vTaskDelay(pdMS_TO_TICKS(500));
 	}
 }
 void task2(void*)
@@ -46,15 +44,16 @@ void listenTask(void*)
 {
 	while(1)
 	{
-		auto event=xEventGroupWaitBits(events,task1_bit|task2_bit,pdTRUE,pdFALSE,portMAX_DELAY);
+		EventBits_t flags = task1_bit|task2_bit;
+		auto event=xEventGroupWaitBits(events,flags,pdTRUE,pdFALSE,portMAX_DELAY);
 		// printf("event:%lu\r\n",event);
 		// printf("event|task2:%lu\r\n",event&task2_bit);
 		printf("event:%lu\r\n",event);
-		if(event&task1_bit)
+		if((event&task1_bit)!=0)
 		{
 			printf("bit 1 set\r\n");
 		}
-		if(event&task2_bit)
+		if((event&task2_bit)!=0)
 		{
 			printf("bit 2 set\r\n");
 		}
@@ -71,7 +70,7 @@ int main()
 
 	events=xEventGroupCreate();
 	xTaskCreate(task1,"task1",defaultStack,nullptr,defaultPriority,nullptr);
-	// xTaskCreate(task2,"task2",defaultStack,nullptr,defaultPriority,nullptr);
+	xTaskCreate(task2,"task2",defaultStack,nullptr,defaultPriority,nullptr);
 	xTaskCreate(listenTask,"listen",defaultStack,nullptr,defaultPriority,nullptr);
 
 	printf("start\r\n");
