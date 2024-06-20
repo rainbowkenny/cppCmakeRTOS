@@ -14,6 +14,8 @@ namespace{
 	EventGroupHandle_t  events{nullptr};
 	const EventBits_t task1_bit{1ul<<1};
 	const EventBits_t task2_bit{1ul<<2};
+	const EventBits_t task3_bit{1ul<<3};
+	const EventBits_t allSyncBits{task1_bit|task2_bit|task3_bit};
 	constexpr uint8_t defaultStack{100};
 	constexpr uint8_t defaultPriority{1};
 }
@@ -24,38 +26,31 @@ void task1(void*)
 {
 	while(1)
 	{
-		xEventGroupSetBits(events,task1_bit);
-		vTaskDelay(pdMS_TO_TICKS(1000));
+		xEventGroupSync(events,task1_bit,allSyncBits,portMAX_DELAY);
+		//will only get here if all sync bits have been set
 	}
 }
 void task2(void*)
 {
 	while(1)
 	{
-		xEventGroupSetBits(events,task2_bit);
-		vTaskDelay(pdMS_TO_TICKS(500));
+		xEventGroupSync(events,task2_bit,allSyncBits,portMAX_DELAY);
+		//will only get here if all sync bits have been set
 	}
 }
 
-void listenTask(void*)
+void task3(void*)
 {
 	while(1)
 	{
-		EventBits_t flags = task1_bit|task2_bit;
-		auto event=xEventGroupWaitBits(events,flags,pdTRUE,pdFALSE,portMAX_DELAY);
-		// printf("event:%lu\r\n",event);
-		if((event&task1_bit)!=0)
-		{
-			printf("bit 1 set\r\n");
-		}
-		if((event&task2_bit)!=0)
-		{
-			printf("bit 2 set\r\n");
-		}
+		xEventGroupSync(events,task3_bit,allSyncBits,portMAX_DELAY);
+		//will only get here if all sync bits have been set
+		printf("Synced!\r\n");
+		vTaskDelay(pdMS_TO_TICKS(1000));
 
-		vTaskDelay(pdMS_TO_TICKS(200));
 	}
 }
+
 int main()
 {
 
@@ -72,7 +67,7 @@ int main()
 
 	xTaskCreate(task1,"task1",defaultStack,nullptr,defaultPriority,nullptr);
 	xTaskCreate(task2,"task2",defaultStack,nullptr,defaultPriority,nullptr);
-	xTaskCreate(listenTask,"listen",defaultStack,nullptr,defaultPriority,nullptr);
+	xTaskCreate(task3,"task3",defaultStack,nullptr,defaultPriority,nullptr);
 
 	printf("start\r\n");
 	vTaskStartScheduler();
